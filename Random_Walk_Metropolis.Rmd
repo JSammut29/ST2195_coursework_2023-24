@@ -1,7 +1,7 @@
 ---
 title: "Random_Walk_Metropolis"
 author: "Jose Michel Sammut"
-date: '2024-07-15'
+date: '2024-07-17'
 output: pdf_document
 ---
 
@@ -11,20 +11,77 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## R Markdown
 
+
 This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+*Use Ctrl + Alt + I (Windows/Linux) to insert a new code chunk in your RMarkdown document.*
 
-```{r cars}
-summary(cars)
+## Question 1
+
+**Markov Chain Monte Carlo (MCMC)** methods are a class of algorithms used to sample from probability distributions when direct sampling is difficult. They are particularly useful for estimating the distribution of complex, high-dimensional spaces.
+
+The **Metropolis-Hastings** algorithm is a specific type of MCMC method. It generates a sequence of sample values from a target probability distribution \( f(x) \), even if the distribution is known only up to a normalizing constant.
+
+\[
+\mathbf{Target \ Distribution:} \quad f(x) = \frac{1}{2} e^{-|x|}
+\]
+This is the probability density function of the **Laplace Distribution** (also known as the double-exponential distribution), centered at 0 with a scale parameter of 1.
+\
+\
+
+
+```{r}
+#set.seed(123)  # Used to generate figures, for reproducibility.
+
+# Define the Probability Density Function
+f <- function(x) { 0.5 * exp(-abs(x)) }
+
+# Metropolis-Hastings Algorithm
+metropolis_hastings <- function(N, s, x0) {
+  samples <- numeric(N)
+  samples[1] <- x0
+  
+  for (i in 2:N) {
+    x_star <- rnorm(1, mean = samples[i-1], sd = s)
+    r <- f(x_star) / f(samples[i-1])
+    u <- runif(1)
+    
+    if (log(u) < log(r)) {
+      samples[i] <- x_star
+    } else {
+      samples[i] <- samples[i-1]
+    }
+  }
+  
+  return(samples)
+}
+
+# Generate samples
+N <- 10000
+s <- 1
+x0 <- 0
+samples <- metropolis_hastings(N, s, x0)
+
+# Calculate sample mean and standard deviation
+sample_mean <- mean(samples)
+sample_sd <- sd(samples)
+
+# Output the mean and standard deviation
+sample_mean
+sample_sd
 ```
 
-## Including Plots
+```{r}
+library(ggplot2)
 
-You can also embed plots, for example:
+# Create histogram and density plot
+ggplot(data.frame(samples = samples), aes(x = samples)) +
+  geom_histogram(aes(y = ..density..), bins = 50, fill = 'lightblue', alpha = 0.7) +
+  geom_density(color = 'blue') +
+  stat_function(fun = f, color = 'red', size = 1) +
+  labs(title = "Histogram and Kernel Density of Samples",
+       x = "x", y = "Density") +
+  theme_minimal()
 
-```{r pressure, echo=FALSE}
-plot(pressure)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
