@@ -23,7 +23,7 @@ create_iteration_gif <- function(samples, steps = c(10, seq(100, 1000, by = 100)
     stat_function(fun = f, color = 'red', size = 1) +
     labs(title = 'Iteration: {closest_state}', x = 'Sample Value', y = 'Density') +
     theme_minimal() +
-    transition_states(iteration, transition_length = 2, state_length = 1) +
+    transition_states(iteration, transition_length = 2, state_length = 1, wrap = FALSE) +
     ease_aes('linear')
   
   # Save the animation as a GIF using gifski_renderer
