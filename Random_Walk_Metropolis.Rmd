@@ -6,7 +6,7 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = TRUE)
 ```
 
 ## R Markdown
@@ -31,7 +31,7 @@ This is the probability density function of the **Laplace Distribution** (also k
 
 
 ```{r}
-#set.seed(123)  # Used to generate figures, for reproducibility.
+set.seed(123)  # Used to generate figures, for reproducibility.
 
 # Define the Probability Density Function
 f <- function(x) { 0.5 * exp(-abs(x)) }
@@ -76,12 +76,84 @@ library(ggplot2)
 
 # Create histogram and density plot
 ggplot(data.frame(samples = samples), aes(x = samples)) +
-  geom_histogram(aes(y = ..density..), bins = 50, fill = 'lightblue', alpha = 0.7) +
+  geom_histogram(aes(y = after_stat(density)), bins = 50, 
+                 fill = 'lightblue', alpha = 0.7) +
   geom_density(color = 'blue') +
-  stat_function(fun = f, color = 'red', size = 1) +
+  stat_function(fun = f, color = 'red', linewidth = 1) +
   labs(title = "Histogram and Kernel Density of Samples",
        x = "x", y = "Density") +
   theme_minimal()
 
 ```
 
+ <br /> 
+
+The **Gelman-Rubin Diagnostic** (denoted \(\hat{R}\)) is widely used in MCMC methods, to assess convergence by comparing within-chain and between-chain variances. 
+\[
+\hat{R} = \sqrt{\frac{B + W}{W}} 
+\]
+
+```{r}
+# Function to calculate Rhat
+calculate_rb <- function(N, s, J) {
+  chains <- list()
+  initial_values <- rnorm(J)
+  
+  for (j in 1:J) {
+    chains[[j]] <- metropolis_hastings(N, s, initial_values[j])
+  }
+  
+  Mjs <- sapply(chains, mean)
+  Vjs <- sapply(chains, var)
+  
+  W <- mean(Vjs)
+  M <- mean(Mjs)
+  B <- sum((Mjs - M)^2) / J
+  
+  Rb <- sqrt((B + W) / W)
+  
+  return(Rb)
+}
+
+# Parameters
+N <- 2000
+J <- 4
+
+# Calculate Rhat for s = 0.001
+s <- 0.001
+Rb_specific <- calculate_rb(N, s, J)
+
+# Output the Rhat value for specified parameters
+Rb_specific
+```
+
+In the context of the Metropolis-Hastings algorithm, \(s\) is the standard deviation of the proposal distribution. It controls how far the algorithm proposes to move in each step. The choice of \(s\) affects the efficiency and convergence of the algorithm.
+
+```{r}
+# Calculate Rhat over a grid of s values
+s_values <- seq(0.001, 1, length.out = 500)
+Rb_values <- sapply(s_values, calculate_rb, N = N, J = J)
+
+# Create a data frame for plotting
+plot_data <- data.frame(s = s_values, Rb = Rb_values)
+plot_data$color <- ifelse(plot_data$Rb <= 1.05, "Below 1.05", "Above 1.05")
+
+# Plot Rhat values
+ggplot(plot_data, aes(x = s, y = Rb, color = color)) +
+  geom_line() +
+  geom_hline(yintercept = 1.05, linetype = "dashed", color = "azure4") +
+  annotate("text", x = max(s_values), y = 1.05, 
+           label = "1.05", vjust = -1, color = "azure4") +
+  scale_color_manual(values = c("Below 1.05" = "green", 
+                                "Above 1.05" = "blue")) +
+  labs(title = expression(paste(hat(R), " Values over Different s Values")),
+       x = "s",
+       y = expression(paste(hat(R), " Value")),
+       color = expression(paste(hat(R), " Value"))) +
+  theme_minimal()
+
+
+```
+
+
+Values of \(\hat{R}\) close to 1 indicate convergence, and it is usually desired for \(\hat{R}\) to be lower than 1.05. Small \(s\) values result in poor convergence due to insufficient exploration (small steps). Thus values of \(s > 0.125 \) are desired. Taking unnecessarily large \(s\) values may still yield good convergence but is potentially inefficient due to high rejection rates.
