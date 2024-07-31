@@ -18,16 +18,16 @@ create_iteration_gif <- function(samples, steps = c(10, seq(100, 1000, by = 100)
   
   # Create the plot
   p <- ggplot(plot_data, aes(x = sample_value)) +
-    geom_histogram(aes(y = ..density..), bins = 50, fill = 'lightblue', alpha = 0.7) +
+    geom_histogram(aes(y = after_stat(density)), bins = 50, fill = 'lightblue', alpha = 0.7) +
     geom_density(color = 'blue') +
-    stat_function(fun = f, color = 'red', size = 1) +
+    stat_function(fun = f, color = 'red', linewidth = 1) +
     labs(title = 'Iteration: {closest_state}', x = 'Sample Value', y = 'Density') +
     theme_minimal() +
     transition_states(iteration, transition_length = 2, state_length = 1, wrap = FALSE) +
     ease_aes('linear')
   
   # Save the animation as a GIF using gifski_renderer
-  anim <- animate(p, nframes = length(steps), fps = 3, width = 800, height = 600, renderer = gifski_renderer())
+  anim <- animate(p, nframes = length(steps), fps = 2, width = 800, height = 600, renderer = gifski_renderer())
   anim_save("metropolis_iterations.gif", animation = anim)
 }
 
