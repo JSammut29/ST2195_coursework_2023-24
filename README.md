@@ -1,7 +1,7 @@
 ## ST2195 Coursework Project 2023-24
 
 ### Overview
-This repository contains the coursework project for ST2195, focusing on the implementation and analysis of the Metropolis-Hastings algorithm and flight data analysis.
+This repository contains the coursework project for ST2195, focusing on the implementation and analysis of the Metropolis-Hastings algorithm and Flight Data Analysis.
 
 ### Part 1: Metropolis-Hastings Algorithm
 - **Objective**: Implement the Metropolis-Hastings algorithm to simulate random samples from a Laplace distribution.

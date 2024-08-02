@@ -4,7 +4,7 @@ library(gifski)
 library(dplyr)
 
 library(rmarkdown)
-#setwd("C:/Users/josmi/Desktop/University of London/Programming for Data Science ST2195/ST2195_coursework_2023-24")
+#setwd("D:/University of London/Programming for Data Science ST2195/ST2195_coursework_2023-24/Part 1")
 set.seed(123)  # Used to generate figures, for reproducibility.
 render("Random_Walk_Metropolis.Rmd")
 
