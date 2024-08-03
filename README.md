@@ -9,6 +9,7 @@ This repository contains the coursework project for ST2195, focusing on the impl
 #### Outputs
 - `Random_Walk_Metropolis.Rmd`: RMarkdown file containing the implementation and analysis.
 - `Random_Walk_Metropolis.pdf`: PDF report of the analysis.
+- `Random_Walk_Metropolis.ipynb`: Python Equivalent.
 - `metropolis_iterations.gif`: Visualization of the sampling iterations.
 
 ![Metropolis-Hastings Sampling](metropolis_iterations.gif)
