@@ -19,13 +19,18 @@ This repository contains the coursework project for ST2195, focusing on the impl
 ---
 
 ### Repository Structure
-- `Random_Walk_Metropolis.Rmd`: RMarkdown file for Part 1.
-- `Random_Walk_Metropolis.pdf`: PDF report for Part 1.
 - `iteration_gif.R`: Script to generate the GIF for sampling iterations.
 - `metropolis_iterations.gif`: GIF visualizing the sampling iterations.
 - `ST2195 Coursework Project.pdf`: Full assignment description.
 - `Statistical Background.docx`: Background document for statistical analysis.
+- `220692829_ST2195`: Structured Report (Part 1 Only)
+- `Flight_Data_Analysis.pdf`: Markdown PDF (Part 2a Only)
+- `part2b.Rmd`: Markdown PDF (Part 2b Partial)
+
 
 ### How to Run
-1. Open the RMarkdown (`.Rmd`) file in RStudio.
+1. Open the RMarkdown (`.Rmd`) file in RStudio, located Part 1 > Random_Walk_Metropolis.Rmd
 2. Knit the document to produce the PDF report.
+3. Open the RMarkdown (`.Rmd`) file in RStudio, located Part 2 > Flight_Data_Analysis.Rmd
+4. Uncomment line 44 for the initial run, to convert compressed csv files into Parquet files.
+5. Knit the document to produce the PDF report.
