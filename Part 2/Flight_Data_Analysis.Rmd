@@ -1,8 +1,9 @@
 ---
 title: "Flight Data Analysis"
-author: "Jose Michel Sammut"
+author: "Student number: 220692829"
 date: '2024-07-29'
 output: pdf_document
+always_allow_html: true
 ---
 
 ```{r setup, include=FALSE}
@@ -19,10 +20,16 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 ```{r}
 # Load Necessary Libraries
 suppressPackageStartupMessages({
-library(arrow)
-library(data.table)
-library(dplyr)
-library(lubridate)
+  library(data.table)
+  library(dplyr)
+  library(tidyr)
+  library(lubridate)
+  library(arrow)
+  library(knitr)
+  library(maditr)
+  library(xtable)
+  library(ggplot2)
+  library(RColorBrewer)
 })
 setwd("D:/University of London/Programming for Data Science ST2195/ST2195_coursework_2023-24/Part 2")
 ```
@@ -35,73 +42,204 @@ Parquet is a custom binary format designed specifically for the needs of big dat
 
 ```{r}
 #source("convert_to_parquet.R")
-```
-
-
-***(a) What are the best times and days of the week to minimise delays each year?***
-
-
-```{r}
-# Function to compute the best times and days to minimize delays for a given year
-compute_best_times <- function(data, year) {
-  data %>%
-    mutate(
-      dep_hour = hour(hms::hms(DepTime)),
-      dep_day_of_week = wday(ymd(paste(Year, Month, DayofMonth, sep = "-")), label = TRUE)
-    ) %>%
-    group_by(dep_day_of_week, dep_hour) %>%
-    summarise(
-      mean_dep_delay = mean(DepDelay, na.rm = TRUE),
-      mean_arr_delay = mean(ArrDelay, na.rm = TRUE),
-      .groups = 'drop'
-    ) %>%
-    summarise(
-      year = year,
-      best_dep_day = dep_day_of_week[which.min(mean_dep_delay)],
-      best_dep_hour = dep_hour[which.min(mean_dep_delay)],
-      best_arr_day = dep_day_of_week[which.min(mean_arr_delay)],
-      best_arr_hour = dep_hour[which.min(mean_arr_delay)]
-    )
-}
 
 # Directory containing the Parquet files
 parquet_dir <- "dataverse_files/parquet_files"
-
-# Initialize an empty list to store summaries
-yearly_summaries <- list()
+plane_data_file <- "dataverse_files/plane-data.csv"
 
 # Get a list of Parquet files
 parquet_files <- list.files(parquet_dir, pattern = "\\.parquet$", full.names = TRUE)
 
-# Process each year separately
-for (file in parquet_files) {
-  # Extract the year from the file name
-  year <- as.integer(gsub(".*_(\\d{4}).*", "\\1", basename(file)))
+```
+
+\newpage
+
+***(a) What are the best times and days of the week to minimise delays each year?***
+
+We may define time blocks as per the below, categorizing time of day by peak vs off-peak, providing insight into how traffic volume impacts delays.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|c|c|}
+\hline
+\textbf{Category} & \textbf{Hourly Range} \\ \hline
+Early Morning & 0:00 - 5:59 \\ \hline
+Morning Peak & 6:00 - 9:59 \\ \hline
+Midday & 10:00 - 13:59 \\ \hline
+Afternoon Peak & 14:00 - 17:59 \\ \hline
+Evening & 18:00 - 23:59 \\ \hline
+\end{tabular}
+\caption{Time Blocks Categorization}
+\end{table}
+
+```{r}
+# Define time blocks
+time_block <- function(hour) {
+  if (hour >= 0 & hour < 6) {
+    return("Early Morning")
+  } else if (hour >= 6 & hour < 10) {
+    return("Morning Peak")
+  } else if (hour >= 10 & hour < 14) {
+    return("Midday")
+  } else if (hour >= 14 & hour < 18) {
+    return("Afternoon Peak")
+  } else {
+    return("Evening")
+  }
+}
+```
+
+
+```{r}
+# Function to process year data
+process_year_data <- function(file_path, year) {
+  data <- read_parquet(file_path)
   
-  # Read the dataset for the year
-  dataset <- open_dataset(file)
+  # Extract necessary features and keep only relevant columns
+  data <- data %>%
+    mutate(
+      DayOfWeek = wday(ymd(paste(Year, Month, DayofMonth, sep = "-")), label = TRUE),
+      HourOfDay = floor(CRSDepTime / 100),
+      TimeBlock = sapply(HourOfDay, time_block),
+      ArrivalDelay = ArrDelay,
+      DepartureDelay = DepDelay
+    ) %>%
+    filter(!is.na(ArrivalDelay) & !is.na(DepartureDelay)) %>%
+    select(DayOfWeek, TimeBlock, ArrivalDelay, DepartureDelay)
   
-  # Filter data for the year and select relevant columns
-  data <- dataset %>%
-    select(Year, Month, DayofMonth, DayOfWeek, DepTime, ArrTime, DepDelay, ArrDelay) %>%
-    collect()
+  print(summary(data))
   
-  # Compute best times for the year
-  summary <- compute_best_times(data, year)
+  # Frequency table
+  frequency_table <- data %>%
+    count(DayOfWeek, TimeBlock) %>%
+    rename("Day of Week" = DayOfWeek, "Time Block" = TimeBlock, "Frequency" = n) %>%
+    pivot_wider(names_from = `Time Block`, values_from = Frequency, values_fill = 0)
   
-  # Store the summary in the list
-  yearly_summaries[[as.character(year)]] <- summary
+  # Create Contingency Table for Arrival Delay
+  # Calculate the means for each combination of DayOfWeek and TimeBlock
+  contingency_arrival <- data %>%
+    group_by(DayOfWeek, TimeBlock) %>%
+    summarize(ArrivalDelay = mean(ArrivalDelay)) %>%
+    ungroup()
+
+  # Round the ArrivalDelay values
+  contingency_arrival$ArrivalDelay <- round(contingency_arrival$ArrivalDelay, 2)
+
+  # Reshape the data to wide format to create the contingency table
+  contingency_arrival <- dcast(contingency_arrival, DayOfWeek ~ TimeBlock, value.var = "ArrivalDelay")
+
+  # Create Contingency Table for Departure Delay
+  # Calculate the means for each combination of DayOfWeek and TimeBlock
+  contingency_departure <- data %>%
+    group_by(DayOfWeek, TimeBlock) %>%
+    summarize(DepartureDelay = mean(DepartureDelay)) %>%
+    ungroup()
+
+  # Round the DepartureDelay values
+  contingency_departure$DepartureDelay <- round(contingency_departure$DepartureDelay, 2)
+
+  # Reshape the data to wide format to create the contingency table
+  contingency_departure <- dcast(contingency_departure, DayOfWeek ~ TimeBlock, value.var = "DepartureDelay")
+
+  # Return the tables
+  list(frequency_table = frequency_table, contingency_arrival = contingency_arrival, contingency_departure = contingency_departure)
+}
+```
+
+```{r}
+# Define the function
+plot_contingency_table <- function(data) {
+  # Convert the data to a table
+  my.tab <- as.table(as.matrix(data[, -1]))
+  rownames(my.tab) <- data$DayOfWeek
+  
+  # Plot settings
+  par(mgp = c(1.5, .3, 0))
+  plot(
+    0,
+    0,
+    pch = "",
+    xlim = c(0.5, 5.5),
+    ylim = c(0.5, 7.5),
+    axes = FALSE,
+    xlab = "Time of Day",
+    ylab = ""
+  )
+  
+  # Add the bubbles to the plot
+  for (i in 1:nrow(my.tab)) {
+    symbols(
+      x = 1:ncol(my.tab),
+      y = rep(i, ncol(my.tab)),
+      circles = sqrt(my.tab[i, ] / 200 / pi),
+      add = TRUE,
+      inches = FALSE,
+      fg = "lightblue",
+      bg = "lightblue"
+    )
+  }
+  
+  # Add axes
+  axis(1, col = "white", col.axis = "black", at = 1:5, labels = colnames(my.tab))
+  axis(2, at = 1:7, labels = rownames(my.tab), las = 1, col.axis = "black", col = "white")
+  
+  # Add numbers to plot
+  for (i in 1:nrow(my.tab)) {
+    text(1:ncol(my.tab), rep(i, ncol(my.tab)), labels = round(my.tab[i, ], 2))
+  }
 }
 
-# Combine all yearly summaries into a single data frame
-final_summary <- bind_rows(yearly_summaries)
-
-print(final_summary)
+#https://www.mzes.uni-mannheim.de/socialsciencedatalab/article/datavis/#:~:text=Code%3A%20Advanced%20contingency%20table
 
 ```
 
 
 
+```{r}
+# Define file paths and years
+years <- 1998:2007
+file_paths <- paste0("dataverse_files/parquet_files/flights_data_", years, ".parquet")
 
+# Process each year and store results
+results <- list()
+for (i in seq_along(years)) {
+  year <- years[i]
+  message("Reviewing data for ", years[i])
+  
+  results[[as.character(years[i])]] <- suppressMessages(process_year_data(file_paths[i], years[i]))
+  
+  message("## Frequency Table for ", year, "\n")
+  results[[as.character(years[i])]]$frequency_table <-
+    results[[as.character(years[i])]]$frequency_table[, c('Day of Week', 'Early Morning', 
+                                                          'Morning Peak', 'Midday',
+                                                          'Afternoon Peak', 'Evening')]
+  print.data.frame(results[[as.character(years[i])]]$frequency_table)
+  
+  message("## Contingency Table for Arrival Delays in ", year, "\n")
+  results[[as.character(years[i])]]$contingency_arrival <-
+    results[[as.character(years[i])]]$contingency_arrival[, c('DayOfWeek', 'Early Morning',
+                                                              'Morning Peak', 'Midday',
+                                                              'Afternoon Peak', 'Evening')]
 
+  #print.data.frame(results[[as.character(years[i])]]$contingency_arrival)
+  plot_contingency_table(results[[as.character(years[i])]]$contingency_arrival)
+  
+  message("## Contingency Table for Departure Delays in ", year, "\n")
+  results[[as.character(years[i])]]$contingency_departure <-
+    results[[as.character(years[i])]]$contingency_departure[, c('DayOfWeek', 'Early Morning',
+                                                              'Morning Peak', 'Midday',
+                                                              'Afternoon Peak', 'Evening')]
+
+  #print.data.frame(results[[as.character(years[i])]]$contingency_departure)
+  plot_contingency_table(results[[as.character(years[i])]]$contingency_departure)
+  
+  message("==================================================================")
+}
+```
+
+A contingency table displays frequencies for combinations of two categorical variables in a matrix format to analyze the relationship between them. In this case, contingency tables were used to analyse the mean Arrival and Departure Delays. It is visually evident that flights before 10am (Early Morning; Morning Peak) are more punctual, experiencing less delays. There is less difference amongst days of the week, although flights have the worst delays on Friday, with Saturdays and Tuesdays performing better.
+
+\newpage
+
+***(b) What are the best times and days of the week to minimise delays each year?***
 

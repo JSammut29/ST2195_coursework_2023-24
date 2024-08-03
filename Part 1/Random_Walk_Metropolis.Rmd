@@ -1,6 +1,6 @@
 ---
 title: "Random_Walk_Metropolis"
-author: "Jose Michel Sammut"
+author: "Student number: 220692829"
 date: '2024-07-17'
 output: pdf_document
 ---

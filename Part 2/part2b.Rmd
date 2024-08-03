@@ -1,0 +1,195 @@
+---
+title: "Flight Data Analysis"
+author: "Student number: 220692829"
+date: '2024-07-29'
+output: pdf_document
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+## R Markdown
+
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+*Use Ctrl + Alt + I (Windows/Linux) to insert a new code chunk in your RMarkdown document.*
+
+```{r}
+# Load Necessary Libraries
+suppressPackageStartupMessages({
+  library(data.table)
+  library(dplyr)
+  library(tidyr)
+  library(lubridate)
+  library(arrow)
+  library(knitr)
+  library(maditr)
+  library(xtable)
+  library(ggplot2)
+  library(RColorBrewer)
+})
+setwd("D:/University of London/Programming for Data Science ST2195/ST2195_coursework_2023-24/Part 2")
+```
+
+## Question 2
+
+**The Data Expo 2009: Airline On-Time Dataset** provides detailed flight arrival and departure information for commercial flights within the USA from October 1987 to April 2008. With nearly 120 million records, this dataset includes variables such as departure and arrival delays, flight cancellations, and diversion indicators, offering a comprehensive view of on-time performance and operational disruptions across nearly two decades. For this analysis, we have selected a subset of the data covering the years 1998 to 2007 to focus on a decade of flight performance.
+
+Parquet is a custom binary format designed specifically for the needs of big data. ***Source this script once to convert CSV Files to Parquet Format.***
+
+```{r}
+#source("convert_to_parquet.R")
+
+# Directory containing the Parquet files
+parquet_dir <- "dataverse_files/parquet_files"
+plane_data_file <- "dataverse_files/plane-data.csv"
+
+# Get a list of Parquet files
+parquet_files <- list.files(parquet_dir, pattern = "\\.parquet$", full.names = TRUE)
+
+# Load plane data
+plane_data <- read.csv(plane_data_file) %>% 
+  select(tailnum, issue_date)
+
+# Convert issue_date to Date type and extract the year
+plane_data$issue_date <- as.Date(plane_data$issue_date, format = "%m/%d/%Y")
+plane_data$Year <- year(plane_data$issue_date)
+# Filter out rows with NA values in issue_date or Year
+plane_data <- plane_data %>% drop_na(issue_date, Year)
+
+
+# Process each Parquet file
+process_plane_data <- function(file, plane_data) {
+  # Read Parquet file
+  data <- read_parquet(file) %>% as.data.table()
+  
+  # Print to diagnose
+  print(paste("Processing file:", file))
+  print(head(data))
+  
+  # Process data
+  data <- data %>%
+    left_join(plane_data, by = c("TailNum" = "tailnum")) %>%
+    mutate(PlaneAge = Year.x - Year.y) %>%
+    filter(!is.na(PlaneAge))
+
+  
+  # Print to diagnose
+  print("After processing:")
+  print(head(data))
+  
+  # Create regression models
+  dep_delay_lm <- lm(DepDelay ~ PlaneAge, data = data)
+  arr_delay_lm <- lm(ArrDelay ~ PlaneAge, data = data)
+  
+  # Return regression models and data
+  list(dep_delay_lm = dep_delay_lm, arr_delay_lm = arr_delay_lm, data = data)
+}
+
+# Initialize lists to store results
+dep_delay_models <- list()
+arr_delay_models <- list()
+processed_data <- list()
+
+# Process each Parquet file (assuming one file per year)
+for (file in parquet_files) {
+  year <- as.numeric(gsub(".*/|\\.parquet", "", file))
+  models <- process_plane_data(file, plane_data)
+  models$data <- models$data %>% drop_na()
+  
+  dep_delay_models[[as.character(year)]] <- models$dep_delay_lm
+  arr_delay_models[[as.character(year)]] <- models$arr_delay_lm
+  processed_data[[as.character(year)]] <- models$data
+  
+  gc()
+}
+
+```
+
+\newpage
+
+```{r}
+# Process each Parquet file
+process_plane_data <- function(file, plane_data) {
+  # Read Parquet file
+  data <- read_parquet(file) %>% as.data.table()
+
+  # Print to diagnose
+  print(paste("Processing file:", file))
+  print(head(data))
+
+  # Process data
+  data <- data %>%
+    mutate(PlaneAge = year - plane_data$Year) %>%
+    filter(!is.na(PlaneAge))
+
+  # Print to diagnose
+  print("After processing:")
+  print(head(data))
+
+  # Create regression models
+  dep_delay_lm <- lm(DepDelay ~ PlaneAge, data = data)
+  arr_delay_lm <- lm(ArrDelay ~ PlaneAge, data = data)
+
+  # Return regression models and data
+  list(dep_delay_lm = dep_delay_lm, arr_delay_lm = arr_delay_lm, data = data)
+}
+
+# Initialize lists to store results
+dep_delay_models <- list()
+arr_delay_models <- list()
+processed_data <- list()
+
+# Process each Parquet file (assuming one file per year)
+for (file in parquet_files) {
+  year <- as.numeric(gsub(".*/|\\.parquet", "", file))
+  models <- process_plane_data(file, plane_data)
+  models$data <- models$data %>% drop_na()
+
+  dep_delay_models[[as.character(year)]] <- models$dep_delay_lm
+  arr_delay_models[[as.character(year)]] <- models$arr_delay_lm
+  processed_data[[as.character(year)]] <- models$data
+}
+
+```
+
+```{r}
+plot_delays <- function(year, data, dep_model, arr_model) {
+  # Check for finite PlaneAge values
+  if (!all(is.finite(data$PlaneAge))) {
+    stop("PlaneAge contains non-finite values")
+  }
+
+  # Generate prediction data
+  plot_data <- data.frame(PlaneAge = seq(min(data$PlaneAge), max(data$PlaneAge), length.out = 100))
+  plot_data$DepDelay <- predict(dep_model, newdata = plot_data)
+  plot_data$ArrDelay <- predict(arr_model, newdata = plot_data)
+
+  # Plot
+  ggplot(data, aes(x = PlaneAge)) +
+    geom_point(aes(y = DepDelay), alpha = 0.3, color = "red") +
+    geom_point(aes(y = ArrDelay), alpha = 0.3, color = "blue") +
+    geom_line(data = plot_data, aes(y = DepDelay), color = "red", size = 1) +
+    geom_line(data = plot_data, aes(y = ArrDelay), color = "blue", size = 1) +
+    labs(title = paste("Plane Age vs Delay in", year),
+         x = "Plane Age (years)",
+         y = "Delay (minutes)",
+         color = "Delay Type") +
+    theme_minimal() +
+    scale_color_manual(values = c("Departure Delay" = "red", "Arrival Delay" = "blue"))
+}
+
+# Example of plotting for a specific year
+plot_delays(2000, processed_data[["2000"]], dep_delay_models[["2000"]], arr_delay_models[["2000"]])
+
+```
+
+
+```{r}
+# Example of plotting for a specific year
+plot_delays(2000, processed_data[["2000"]], dep_delay_models[["2000"]], arr_delay_models[["2000"]])
+```
+
